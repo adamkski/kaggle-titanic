@@ -7,6 +7,10 @@ output: html_document
 
 ```{r}
 library(readr)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
 setwd("~/R101/titanic/")
 
 train <- read_csv("train.csv")
@@ -27,7 +31,7 @@ prop.table(table(as.factor(train$Sex), train$Survived),1)
 
 test$Survived[test$Sex == 'female'] <- 1
 submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-write.csv(submit, file = "womenfirst.csv", row.names = F)
+#write.csv(submit, file = "womenfirst.csv", row.names = F)
 ```
 
 # prediction 3: children survive, adults less so
@@ -80,6 +84,16 @@ write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
 
 ```
 
+# prediction 5: using a decision tree
+
+```{r}
+str(train)
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked,
+             data = train,
+             method = "class")
+plot(fit)
+text(fit)
+```
 
 
 
