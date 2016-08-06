@@ -19,7 +19,7 @@ test <- read_csv("test.csv")
 # prediction 1: everyone dies
 test$Survived <- rep(0, 418)
 submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-write.csv(submit, file = "theyallperish.csv", row.names = F)
+#write.csv(submit, file = "theyallperish.csv", row.names = F)
 ```
 
 # prediction 2: women survive, men die
@@ -80,7 +80,7 @@ test$Survived[test$Sex == 'female'] <- 1
 test$Survived[test$Sex == 'female' & test$Pclass == 3 & test$Fare >= 20] <- 0
 
 submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
+#write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
 
 ```
 
@@ -91,8 +91,16 @@ str(train)
 fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked,
              data = train,
              method = "class")
+# make an rpart plot
 plot(fit)
 text(fit)
+# make a fancy rpart plot
+fancyRpartPlot(fit)
+
+# prepare a submission to kaggle
+Prediction <- predict(fit, test, type = "class")
+submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "myfirsttree.csv", row.names = F)
 ```
 
 
