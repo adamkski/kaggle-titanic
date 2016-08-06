@@ -1,0 +1,88 @@
+---
+title: 'kaggle tutorial: titanic survival'
+author: "Adam Kowalczewski"
+date: "27 July 2016"
+output: html_document
+---
+
+```{r}
+library(readr)
+setwd("~/R101/titanic/")
+
+train <- read_csv("train.csv")
+test <- read_csv("test.csv")
+
+# prediction 1: everyone dies
+test$Survived <- rep(0, 418)
+submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
+write.csv(submit, file = "theyallperish.csv", row.names = F)
+```
+
+# prediction 2: women survive, men die
+
+We can see that most women survived, while very few men did.  We can update our prediction to be that all women survive and see how our score changes.
+
+```{r}
+prop.table(table(as.factor(train$Sex), train$Survived),1)
+
+test$Survived[test$Sex == 'female'] <- 1
+submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
+write.csv(submit, file = "womenfirst.csv", row.names = F)
+```
+
+# prediction 3: children survive, adults less so
+
+We know the famous "Women and children first" approach to rescue the Titanic took so we can try using the age variable to get some more accuracy.
+
+```{r}
+summary(train$Age)
+
+# assume the NAs were the average age (so will not be assigned child below)
+train$Child <- 0
+train$Child[train$Age < 18] <- 1
+
+# see survivor rate for different subsets
+# aggregate takes target variable left of ~ and subsets by vars on the right
+aggregate(Survived ~ Child + Sex, data = train, FUN=sum)
+# find totals for each subset
+aggregate(Survived ~ Child + Sex, data = train, FUN=length)
+
+# combine the two into a proportion
+aggregate(Survived ~ Child + Sex, data = train, FUN=function(x){sum(x)/length(x)})
+
+
+
+```
+
+It looks like the gender dimension still explains most of the difference.  Being a child didn't rescue males all that much more... [or did it]?
+
+# prediction 4: higher socio economic status increased your chance of survival
+We'll bin the continuous variable Fare so we can tabulate it.  We'll use less than $10, $10 - $20, $20 - $30, and more than $30.
+
+It turns out that women in 3rd class who paid for a more expensive ticket were less likely to survive, perhaps because expensive cabins were futher from lifeboats?  We can update our prediction based on this.
+
+```{r}
+train$Fare2 <- '30+'
+train$Fare2[train$Fare >= 20 & train$Fare < 30] <- '20 - 30'
+train$Fare2[train$Fare >= 10 & train$Fare < 20] <- '10 - 20'
+train$Fare2[train$Fare < 10] <- '<10'
+
+aggregate(Survived ~ Fare2 + Pclass + Sex, data = train, FUN=function(x){sum(x) / length(x)})
+```
+
+```{r}
+test$Survived <- 0
+test$Survived[test$Sex == 'female'] <- 1
+test$Survived[test$Sex == 'female' & test$Pclass == 3 & test$Fare >= 20] <- 0
+
+submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
+write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
+
+```
+
+
+
+
+
+
+
