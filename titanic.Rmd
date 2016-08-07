@@ -6,6 +6,7 @@ output: html_document
 ---
 
 ```{r}
+library(dplyr)
 library(readr)
 library(rpart)
 library(rattle)
@@ -125,8 +126,8 @@ write.csv(submit, file = "mysecondtree.csv", row.names = F)
 
 We'll try to extract some more information from some of the text fields.  We'll need to do the same thing to both training and testing datasets so we'll first bind them together.
 ```{r p7}
-# since train dataset lacks Survived column, we'll add it
-train$Survived <- NA
+# since test dataset lacks Survived column, we'll add it
+test$Survived <- NA
 combi <- rbind(train, test)
 
 # extract person's title from each row
@@ -169,8 +170,60 @@ test <- combi[892:1309,]
 fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize + FamilyID,
              data = train,
              method = "class")
+fancyRpartPlot(fit)
+# create a submission
+Prediction <- predict(fit, test, type = "class")
+submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "withengineeredfeatures.csv", row.names = F)
+
+```
+
+# prediction 7b: any other features we can think of
+
+some tickets have text prepending them, including PC, CA, WC, WEP, SOTON/OQ.  What do these mean?
+```{r}
+combi$Ticket_type <- sapply(combi$Ticket, FUN = function(x) {
+  if (grepl("[A-Z]", x)) {
+    # strip away characters
+    x <- substr(x,1,regexpr(" [^ ]*$",x)-1)
+    # remove spaces and periods
+    x <- gsub('[ .]','',x)
+    x
+  }
+  else {
+    "Other"
+  }
+  })
+combi$Ticket_type <- factor(combi$Ticket_type)
+table(combi$Ticket_type)
+table(combi$FamilyID)
+```
+
+I'll also give a dummy that says whether the ticket had a cabin assigned or not, and what deck the cabin was on.
+```{r}
+combi$has_cabin <- 0
+combi$has_cabin[grepl('[A-Z]',combi$Cabin)] <- 1
+
+# cabin deck
+combi$cabin_level <- NA
+combi$cabin_level[combi$has_cabin == 1] <- substr(combi$Cabin[combi$has_cabin == 1], 1, 1)
+combi$cabin_level <- factor(combi$cabin_level)
 ```
 
 
+Break apart the dataset into train and test again so we can run predictions.
+```{r}
+train <- combi[1:891,]
+test <- combi[892:1309,]
 
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize + FamilyID + Ticket_type,
+             data = train,
+             method = "class")
+fancyRpartPlot(fit)
+# create a submission
+Prediction <- predict(fit, test, type = "class")
+submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "withengineeredfeatures2.csv", row.names = F)
+
+```
 
