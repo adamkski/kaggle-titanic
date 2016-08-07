@@ -15,11 +15,13 @@ setwd("~/R101/titanic/")
 
 train <- read_csv("train.csv")
 test <- read_csv("test.csv")
+```
 
 # prediction 1: everyone dies
+```{r}
 test$Survived <- rep(0, 418)
 submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-#write.csv(submit, file = "theyallperish.csv", row.names = F)
+write.csv(submit, file = "theyallperish.csv", row.names = F)
 ```
 
 # prediction 2: women survive, men die
@@ -31,7 +33,7 @@ prop.table(table(as.factor(train$Sex), train$Survived),1)
 
 test$Survived[test$Sex == 'female'] <- 1
 submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-#write.csv(submit, file = "womenfirst.csv", row.names = F)
+write.csv(submit, file = "womenfirst.csv", row.names = F)
 ```
 
 # prediction 3: children survive, adults less so
@@ -58,7 +60,7 @@ aggregate(Survived ~ Child + Sex, data = train, FUN=function(x){sum(x)/length(x)
 
 ```
 
-It looks like the gender dimension still explains most of the difference.  Being a child didn't rescue males all that much more... [or did it]?
+It looks like the gender dimension still explains most of the difference.  Being a child didn't rescue males all that much more... [or did it]?  So we won't make a submission here.
 
 # prediction 4: higher socio economic status increased your chance of survival
 We'll bin the continuous variable Fare so we can tabulate it.  We'll use less than $10, $10 - $20, $20 - $30, and more than $30.
@@ -80,7 +82,7 @@ test$Survived[test$Sex == 'female'] <- 1
 test$Survived[test$Sex == 'female' & test$Pclass == 3 & test$Fare >= 20] <- 0
 
 submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-#write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
+write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
 
 ```
 
@@ -103,7 +105,71 @@ submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
 write.csv(submit, file = "myfirsttree.csv", row.names = F)
 ```
 
+# prediction 6: modifying controls on the decision tree
 
+Lowering the complexity parameter threshold doesn't improve on prediction 5.
+```{r}
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked,
+             data = train,
+             method = "class",
+             control = rpart.control(cp = 0.005))
+fancyRpartPlot(fit)
+
+# prepare a submission to kaggle
+Prediction <- predict(fit, test, type = "class")
+submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "mysecondtree.csv", row.names = F)
+```
+
+# prediction 7: feature engineering on titles
+
+We'll try to extract some more information from some of the text fields.  We'll need to do the same thing to both training and testing datasets so we'll first bind them together.
+```{r p7}
+# since train dataset lacks Survived column, we'll add it
+train$Survived <- NA
+combi <- rbind(train, test)
+
+# extract person's title from each row
+combi$Title <- sapply(combi$Name, FUN = function(x) {strsplit(x, split = '[,.]')[[1]][2]})
+# strip off leading spaces
+combi$Title <- sub(' ', '', combi$Title)
+
+# combine similar titles into single category
+combi$Title[combi$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
+combi$Title[combi$Title %in% c('Capt', 'Don', 'Major', 'Sir')] <- 'Sir' # these are rich men
+combi$Title[combi$Title %in% c('Dona', 'Lady', 'the Countess','Jonkheer')] <- 'Lady' # these are rich women
+# change back to factor
+combi$Title <- factor(combi$Title)
+
+# large family sizes may also affect survival
+combi$FamilySize <- combi$SibSp + combi$Parch + 1
+
+# some families may have more trouble than others, create a family ID
+combi$Surname <- sapply(combi$Name, FUN = function(x) {strsplit(x, split = '[,.]')[[1]][1]})
+combi$FamilyID <- paste(as.character(combi$FamilySize), combi$Surname, sep = "")
+# remove small families to avoid repition of family IDs (greater than 2 we assume no reps)
+combi$FamilyID[combi$FamilySize <= 2] <- 'Small'
+```
+
+Some further cleanup is needed because a few families slip through our assumptions.  For instance, the Appleton family got a family size of 3 and yet seems to only have one member.
+
+```{r}
+famIDs <- data.frame(table(combi$FamilyID))
+famIDs <- famIDs[famIDs$Freq <= 2,]
+# overwrite the errors
+combi$FamilyID[combi$FamilyID %in% famIDs$Var1] <- 'Small'
+combi$FamilyID <- factor(combi$FamilyID)
+```
+
+Break apart the dataset into train and test again so we can run predictions.
+```{r}
+train <- combi[1:891,]
+test <- combi[892:1309,]
+
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize + FamilyID,
+             data = train,
+             method = "class")
+```
 
 
 
