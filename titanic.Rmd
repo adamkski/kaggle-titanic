@@ -131,6 +131,8 @@ We'll try to extract some more information from some of the text fields.  We'll 
 # since test dataset lacks Survived column, we'll add it
 test$Survived <- NA
 combi <- rbind(train, test)
+# this var causes problems later, so i'll try to fix it early
+combi$Sex <- factor(combi$Sex)
 
 # extract person's title from each row
 combi$Title <- sapply(combi$Name, FUN = function(x) {strsplit(x, split = '[,.]')[[1]][2]})
@@ -197,8 +199,6 @@ combi$Ticket_type <- sapply(combi$Ticket, FUN = function(x) {
   }
   })
 combi$Ticket_type <- factor(combi$Ticket_type)
-table(combi$Ticket_type)
-table(combi$FamilyID)
 ```
 
 I'll also give a dummy that says whether the ticket had a cabin assigned or not, and what deck the cabin was on.
@@ -261,7 +261,6 @@ Having cleaned the data up, let's run the model
 
 ```{r}
 # randomness is introduced in this model, so set a seed for reproducible results
-combi$Sex <- factor(combi$Sex)
 train <- combi[1:891,]
 test <- combi[892:1309,]
 
@@ -282,6 +281,9 @@ write.csv(submit, file = "firstforest.csv", row.names = F)
 This ensemble can handle more levels of factors than random forests can.
 
 ```{r 9}
+train <- combi[1:891,]
+test <- combi[892:1309,]
+
 set.seed(215)
 fit <- cforest(as.factor(Survived) ~  Pclass + Sex + Age + SibSp + Parch + Fare +
                       Embarked + Title + FamilySize + FamilyID,
