@@ -12,6 +12,8 @@ library(rpart)
 library(rattle)
 library(rpart.plot)
 library(RColorBrewer)
+library(randomForest)
+library(party)
 setwd("~/R101/titanic/")
 
 train <- read_csv("train.csv")
@@ -181,7 +183,7 @@ write.csv(submit, file = "withengineeredfeatures.csv", row.names = F)
 # prediction 7b: any other features we can think of
 
 some tickets have text prepending them, including PC, CA, WC, WEP, SOTON/OQ.  What do these mean?
-```{r}
+```{r 7b}
 combi$Ticket_type <- sapply(combi$Ticket, FUN = function(x) {
   if (grepl("[A-Z]", x)) {
     # strip away characters
@@ -216,14 +218,78 @@ Break apart the dataset into train and test again so we can run predictions.
 train <- combi[1:891,]
 test <- combi[892:1309,]
 
-fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize + FamilyID + Ticket_type,
+# removing familyID
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize  + Ticket_type + cabin_level,
              data = train,
-             method = "class")
+             method = "class",
+             control = rpart.control(minsplit = 10))
 fancyRpartPlot(fit)
+
 # create a submission
 Prediction <- predict(fit, test, type = "class")
 submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
 write.csv(submit, file = "withengineeredfeatures2.csv", row.names = F)
 
 ```
+
+
+# prediction 8 using random forests
+
+To use random forests, we'll need to impute missing values.  Run prediction 7 first.
+```{r 8}
+# impute age
+Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Title + FamilySize,
+                data = combi[!is.na(combi$Age),],
+                method = "anova")
+combi$Age[is.na(combi$Age)] <- predict(Agefit, combi[is.na(combi$Age),])
+
+# assign missing emarked
+combi$Embarked[c(62,830)] = "S"
+combi$Embarked <- factor(combi$Embarked)
+
+# impute missing fare
+combi$Fare[1044] <- median(combi$Fare, na.rm = T)
+
+# reduce levels in FamilyID
+combi$FamilyID2 <- combi$FamilyID
+combi$FamilyID2 <- as.character(combi$FamilyID2)
+combi$FamilyID2[combi$FamilySize <= 3] <- 'Small'
+combi$FamilyID2 <- factor(combi$FamilyID2)
+```
+
+Having cleaned the data up, let's run the model
+
+```{r}
+# randomness is introduced in this model, so set a seed for reproducible results
+combi$Sex <- factor(combi$Sex)
+train <- combi[1:891,]
+test <- combi[892:1309,]
+
+set.seed(215)
+fit <- randomForest(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare +
+                      Embarked + Title + FamilySize + FamilyID2,
+                    data = train,
+                    importance = TRUE,
+                    ntree = 200)
+varImpPlot(fit)
+
+Prediction <- predict(fit, test)
+submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "firstforest.csv", row.names = F)
+```
+
+# prediciton 9 using conditional inference trees
+This ensemble can handle more levels of factors than random forests can.
+
+```{r 9}
+set.seed(215)
+fit <- cforest(as.factor(Survived) ~  Pclass + Sex + Age + SibSp + Parch + Fare +
+                      Embarked + Title + FamilySize + FamilyID,
+                    data = train,
+                    controls = cforest_unbiased(ntree = 200, mtry = 3))
+Prediction <- predict(fit, test, OOB = TRUE, type = "response")
+submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "conditionalforest.csv", row.names = F)
+```
+
 
