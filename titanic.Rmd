@@ -14,7 +14,6 @@ library(rpart.plot)
 library(RColorBrewer)
 library(randomForest)
 library(party)
-setwd("~/R101/titanic/")
 
 train <- read_csv("train.csv")
 test <- read_csv("test.csv")
@@ -92,7 +91,6 @@ write.csv(submit, file = "women_class_combo_model.csv", row.names = F)
 # prediction 5: using a decision tree
 
 ```{r}
-str(train)
 fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked,
              data = train,
              method = "class")
@@ -128,6 +126,7 @@ write.csv(submit, file = "mysecondtree.csv", row.names = F)
 
 We'll try to extract some more information from some of the text fields.  We'll need to do the same thing to both training and testing datasets so we'll first bind them together.
 ```{r p7}
+train <- read_csv("train.csv")
 # since test dataset lacks Survived column, we'll add it
 test$Survived <- NA
 combi <- rbind(train, test)
@@ -285,13 +284,14 @@ train <- combi[1:891,]
 test <- combi[892:1309,]
 
 set.seed(215)
+# adding cabin level and ticket type factors I created in prediction 7b
 fit <- cforest(as.factor(Survived) ~  Pclass + Sex + Age + SibSp + Parch + Fare +
-                      Embarked + Title + FamilySize + FamilyID,
+                      Embarked + Title + FamilySize + FamilyID + cabin_level + Ticket_type,
                     data = train,
                     controls = cforest_unbiased(ntree = 200, mtry = 3))
 Prediction <- predict(fit, test, OOB = TRUE, type = "response")
 submit <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
-write.csv(submit, file = "conditionalforest.csv", row.names = F)
+write.csv(submit, file = "conditionalforest_with_more_features.csv", row.names = F)
 ```
 
 
